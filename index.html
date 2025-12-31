@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAV to MP3 Pro | Batch Converter</title>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --accent: #8b5cf6;
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.08);
+            --success: #10b981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        /* Animated Background */
+        .bg-mesh {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+            background-size: 200% 200%;
+            animation: meshGradient 15s ease infinite;
+        }
+
+        @keyframes meshGradient { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+
+        /* Main Layout */
+        .app-container {
+            width: 100%;
+            max-width: 800px;
+            padding: 40px 20px;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+
+        /* Main Card */
+        .glass-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+        }
+
+        /* Settings Bar */
+        .settings-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .setting-group { display: flex; align-items: center; gap: 12px; }
+        
+        label { 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            color: var(--text-muted); 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        select:hover { border-color: var(--primary); }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 60px 20px;
+            text-align: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            background: rgba(255,255,255,0.01);
+            overflow: hidden;
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px var(--primary-glow);
+        }
+
+        .drop-zone input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            fill: var(--text-muted);
+            transition: 0.3s;
+        }
+        
+        .drop-zone:hover .upload-icon { fill: var(--primary); transform: scale(1.1); }
+
+        /* Visualizer */
+        canvas#visualizer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+
+        /* File List / Queue */
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .file-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+            overflow: hidden;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.8rem;
+        }
+
+        .file-info { flex: 1; min-width: 0; z-index: 2; }
+        .file-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+        .file-meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 10px; }
+
+        .file-status {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .file-progress {
+            position: absolute;
+            bottom: 0; left: 0; height: 3px;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.2s linear;
+        }
+
+        .meta-inputs {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .meta-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 2px 0;
+            width: 100px;
+            transition: 0.2s;
+        }
+        
+        .meta-input:focus { border-color: var(--primary); color: white; outline: none; }
+
+        .btn-download {
+            background: var(--success);
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            opacity: 0;
+            transform: scale(0.9);
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .file-card.done .btn-download { opacity: 1; transform: scale(1); pointer-events: all; }
+        .file-card.done .file-status { display: none; }
+        
+        .btn-download:hover { background: #059669; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+
+        /* Toast */
+        .toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast {
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: translateX(100%);
+            animation: toastIn 0.3s forwards;
+            background: #1e293b;
+            color: white;
+        }
+        @keyframes toastIn { to { transform: translateX(0); } }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+            .settings-bar { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .file-meta { flex-direction: column; gap: 2px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-mesh"></div>
+
+<div class="app-container">
+    <header>
+        <h1>Studio Converter</h1>
+        <p class="subtitle">Secure, Client-side WAV to MP3 Batch Processing</p>
+    </header>
+
+    <div class="glass-panel">
+        <div class="settings-bar">
+            <div class="setting-group">
+                <label>Bitrate</label>
+                <select id="bitrateSetting">
+                    <option value="320" selected>320 kbps (Insane)</option>
+                    <option value="256">256 kbps (Studio)</option>
+                    <option value="192">192 kbps (Standard)</option>
+                    <option value="128">128 kbps (Light)</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Mode</label>
+                <select id="channelSetting">
+                    <option value="stereo">Joint Stereo</option>
+                    <option value="mono">Mono</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".wav, audio/wav" multiple>
+            <svg class="upload-icon" viewBox="0 0 24 24">
+                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+            </svg>
+            <h3 style="font-size: 1.2rem; font-weight: 600; margin-bottom: 8px;">Drag & Drop WAV files</h3>
+            <p style="color: var(--text-muted);">or click to browse multiple files</p>
+            <canvas id="visualizer"></canvas>
+        </div>
+
+        <div class="file-list" id="fileList">
+            </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+    /* --- WORKER CODE --- */
+    const workerScript = `
+        importScripts('https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js');
+
+        self.onmessage = function(e) {
+            const { id, channels, sampleRate, samples, bitrate } = e.data;
+            
+            try {
+                const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, bitrate);
+                const mp3Data = [];
+                const sampleBlockSize = 1152; 
+                const length = samples[0].length;
+                let left, right;
+                
+                for (let i = 0; i < length; i += sampleBlockSize) {
+                    left = samples[0].subarray(i, i + sampleBlockSize);
+                    right = channels === 2 ? samples[1].subarray(i, i + sampleBlockSize) : undefined;
+                    
+                    let mp3buf = (channels === 2) ? mp3encoder.encodeBuffer(left, right) : mp3encoder.encodeBuffer(left);
+                    
+                    if (mp3buf.length > 0) mp3Data.push(mp3buf);
+                    
+                    if (i % (sampleBlockSize * 20) === 0) {
+                        self.postMessage({ type: 'progress', id, value: i / length });
+                    }
+                }
+                
+                const mp3buf = mp3encoder.flush();
+                if (mp3buf.length > 0) mp3Data.push(mp3buf);
+                
+                self.postMessage({ type: 'complete', id, blob: new Blob(mp3Data, { type: 'audio/mp3' }) });
+            } catch (err) {
+                self.postMessage({ type: 'error', id, message: err.message });
+            }
+        };
+    `;
+    const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(workerBlob);
+
+    /* --- APP LOGIC --- */
+    const UI = {
+        dropZone: document.getElementById('dropZone'),
+        fileInput: document.getElementById('fileInput'),
+        fileList: document.getElementById('fileList'),
+        canvas: document.getElementById('visualizer'),
+        ctx: document.getElementById('visualizer').getContext('2d'),
+        toastContainer: document.getElementById('toastContainer'),
+        
+        init() {
+            // Resize canvas
+            this.canvas.width = this.dropZone.offsetWidth;
+            this.canvas.height = this.dropZone.offsetHeight;
+            window.addEventListener('resize', () => {
+                this.canvas.width = this.dropZone.offsetWidth;
+                this.canvas.height = this.dropZone.offsetHeight;
+            });
+
+            // Drag Events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                this.dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            this.dropZone.addEventListener('dragover', () => this.dropZone.classList.add('drag-over'));
+            this.dropZone.addEventListener('dragleave', () => this.dropZone.classList.remove('drag-over'));
+            this.dropZone.addEventListener('drop', (e) => {
+                this.dropZone.classList.remove('drag-over');
+                Processor.handleFiles(e.dataTransfer.files);
+            });
+            this.fileInput.addEventListener('change', (e) => Processor.handleFiles(e.target.files));
+        },
+
+        createFileCard(file, id) {
+            const div = document.createElement('div');
+            div.className = 'file-card';
+            div.id = `card-${id}`;
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            
+            // Extract potential Artist/Title from filename
+            let baseName = file.name.replace(/\.wav$/i, '');
+            let artist = "Unknown Artist";
+            let title = baseName;
+            
+            if(baseName.includes('-')) {
+                const parts = baseName.split('-');
+                artist = parts[0].trim();
+                title = parts.slice(1).join('-').trim();
+            }
+
+            div.innerHTML = `
+                <div class="file-icon">WAV</div>
+                <div class="file-info">
+                    <div class="file-name" title="${file.name}">${file.name}</div>
+                    <div class="file-meta">
+                        <span>${sizeMB} MB</span>
+                        <span id="dur-${id}">Calculating...</span>
+                    </div>
+                    <div class="meta-inputs">
+                        <input type="text" class="meta-input" placeholder="Artist" value="${artist}" id="artist-${id}">
+                        <input type="text" class="meta-input" placeholder="Title" value="${title}" id="title-${id}">
+                    </div>
+                </div>
+                <div class="file-status" id="status-${id}">Queueing...</div>
+                <a class="btn-download" id="dl-${id}" download>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Save MP3
+                </a>
+                <div class="file-progress" id="prog-${id}"></div>
+            `;
+            this.fileList.prepend(div);
+            return id;
+        },
+
+        updateProgress(id, value) {
+            const bar = document.getElementById(`prog-${id}`);
+            const status = document.getElementById(`status-${id}`);
+            if (bar) bar.style.width = `${value * 100}%`;
+            if (status) status.textContent = `Encoding ${Math.floor(value * 100)}%`;
+        },
+
+        markComplete(id, blob, originalName) {
+            const card = document.getElementById(`card-${id}`);
+            const status = document.getElementById(`status-${id}`);
+            const btn = document.getElementById(`dl-${id}`);
+            const artistInput = document.getElementById(`artist-${id}`);
+            const titleInput = document.getElementById(`title-${id}`);
+            
+            card.classList.add('done');
+            
+            // Update the filename based on user inputs
+            const updateDownload = () => {
+                const artist = artistInput.value.trim() || "Unknown";
+                const title = titleInput.value.trim() || originalName.replace('.wav', '');
+                const cleanName = `${artist} - ${title}.mp3`.replace(/[/\\?%*:|"<>]/g, '-');
+                btn.download = cleanName;
+            };
+
+            const url = URL.createObjectURL(blob);
+            btn.href = url;
+            updateDownload();
+            
+            // Listen for meta changes
+            artistInput.addEventListener('input', updateDownload);
+            titleInput.addEventListener('input', updateDownload);
+
+            this.showToast(`${originalName} converted!`);
+        },
+
+        showToast(msg) {
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.textContent = msg;
+            this.toastContainer.appendChild(t);
+            setTimeout(() => t.remove(), 4000);
+        }
+    };
+
+    const Processor = {
+        queue: [],
+        activeWorkers: 0,
+        maxWorkers: navigator.hardwareConcurrency ? Math.min(navigator.hardwareConcurrency, 4) : 2,
+        audioCtx: new (window.AudioContext || window.webkitAudioContext)(),
+
+        handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (!file.name.toLowerCase().endsWith('.wav') && file.type !== 'audio/wav') {
+                    UI.showToast(`Skipped ${file.name}: Not a WAV file`);
+                    return;
+                }
+                const id = Math.random().toString(36).substr(2, 9);
+                UI.createFileCard(file, id);
+                this.queue.push({ file, id });
+            });
+            this.processQueue();
+        },
+
+        async processQueue() {
+            if (this.queue.length === 0 || this.activeWorkers >= this.maxWorkers) return;
+
+            const job = this.queue.shift();
+            this.activeWorkers++;
+            
+            try {
+                const statusEl = document.getElementById(`status-${job.id}`);
+                statusEl.textContent = "Decoding...";
+                
+                // Decode
+                const arrayBuffer = await job.file.arrayBuffer();
+                const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
+                
+                // Update Duration in UI
+                const min = Math.floor(audioBuffer.duration / 60);
+                const sec = Math.floor(audioBuffer.duration % 60).toString().padStart(2,'0');
+                document.getElementById(`dur-${job.id}`).textContent = `${min}:${sec}`;
+
+                // Visualize briefly
+                this.visualize(audioBuffer);
+
+                // Prepare Data for Worker
+                const settings = this.getSettings();
+                const worker = new Worker(workerUrl);
+                
+                // Convert AudioBuffer to Int16 PCM
+                const desiredChannels = settings.channels === 'stereo' ? 2 : 1;
+                const sourceChannels = audioBuffer.numberOfChannels;
+                const samples = [];
+                
+                for(let i=0; i<Math.min(desiredChannels, sourceChannels); i++) {
+                    samples.push(this.floatTo16BitPCM(audioBuffer.getChannelData(i)));
+                }
+                
+                // Handle Mono source to Stereo output duplication
+                if (desiredChannels === 2 && sourceChannels === 1) samples.push(samples[0]);
+
+                worker.postMessage({
+                    id: job.id,
+                    channels: desiredChannels,
+                    sampleRate: audioBuffer.sampleRate,
+                    samples: samples,
+                    bitrate: parseInt(settings.bitrate)
+                });
+
+                worker.onmessage = (e) => {
+                    if (e.data.type === 'progress') {
+                        UI.updateProgress(e.data.id, e.data.value);
+                    } else if (e.data.type === 'complete') {
+                        UI.markComplete(e.data.id, e.data.blob, job.file.name);
+                        worker.terminate();
+                        this.activeWorkers--;
+                        this.processQueue();
+                    } else if (e.data.type === 'error') {
+                        UI.showToast(`Error: ${e.data.message}`);
+                        this.activeWorkers--;
+                        this.processQueue();
+                    }
+                };
+
+            } catch (err) {
+                console.error(err);
+                UI.showToast(`Failed to process ${job.file.name}`);
+                document.getElementById(`status-${job.id}`).textContent = "Failed";
+                this.activeWorkers--;
+                this.processQueue();
+            }
+        },
+
+        getSettings() {
+            return {
+                bitrate: document.getElementById('bitrateSetting').value,
+                channels: document.getElementById('channelSetting').value
+            };
+        },
+
+        floatTo16BitPCM(float32Array) {
+            const int16Array = new Int16Array(float32Array.length);
+            for (let i = 0; i < float32Array.length; i++) {
+                let s = Math.max(-1, Math.min(1, float32Array[i]));
+                int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return int16Array;
+        },
+
+        visualize(buffer) {
+            // Simple visualizer snapshot
+            const data = buffer.getChannelData(0);
+            const ctx = UI.ctx;
+            const w = UI.canvas.width;
+            const h = UI.canvas.height;
+            const step = Math.ceil(data.length / w);
+            const amp = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.beginPath();
+            ctx.moveTo(0, amp);
+            for (let i = 0; i < w; i++) {
+                const slice = data.slice(i * step, (i + 1) * step);
+                let sum = 0;
+                for(let j=0; j<slice.length; j++) sum += Math.abs(slice[j]);
+                const avg = sum / slice.length;
+                ctx.lineTo(i, amp - (avg * amp * 2)); // Dynamic height
+            }
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Fade out effect
+            setTimeout(() => {
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.1)';
+                const fade = setInterval(() => {
+                    ctx.fillRect(0,0,w,h);
+                }, 50);
+                setTimeout(() => clearInterval(fade), 2000);
+            }, 1000);
+        }
+    };
+
+    UI.init();
+
+</script>
+</body>
+</html>
